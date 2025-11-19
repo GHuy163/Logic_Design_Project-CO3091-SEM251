@@ -17,4 +17,8 @@ extern String CORE_IOT_PORT;
 
 extern boolean isWifiConnected;
 extern SemaphoreHandle_t xBinarySemaphoreInternet;
+
+extern QueueHandle_t xQueueWifiStrength; // Queue to get the signal strength of wifi
+extern QueueHandle_t xQueueSoilMoisture; // Queue to get the value of soil moisture
+
 #endif
