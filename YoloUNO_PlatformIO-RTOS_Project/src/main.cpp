@@ -26,12 +26,12 @@ void setup()
   // check_info_File(0);
   
   /*************************************** Tan Le's tasks *************************************/
-  // xTaskCreate(Wifi_Task, "Task WIFI", 8192, NULL, 3, NULL);
-  // xTaskCreate(wifi_monitor_task, "WiFiMonitor", 4096, NULL, 2, NULL);
-  // xTaskCreate(neo_blinky, "Task NEO Blink", 4096, NULL, 2, NULL);
-  // xTaskCreate(lightAffectsLed, "Light Affects LED", 4096 , NULL, 2, NULL);
-  // xTaskCreate(soilMoistureAffectsPump, "Soil Moisture Affects Pump", 4096, NULL, 2, NULL);
-  // xTaskCreate(temp_humi_monitor, "Task TEMP HUMI Monitor", 4096, NULL, 2, NULL);
+  xTaskCreate(Wifi_Task, "Task WIFI", 8192, NULL, 3, NULL);
+  xTaskCreate(wifi_monitor_task, "WiFiMonitor", 4096, NULL, 2, NULL);
+  xTaskCreate(neo_blinky, "Task NEO Blink", 4096, NULL, 2, NULL);
+  xTaskCreate(lightAffectsLed, "Light Affects LED", 4096 , NULL, 2, NULL);
+  xTaskCreate(soilMoistureAffectsPump, "Soil Moisture Affects Pump", 4096, NULL, 2, NULL);
+  xTaskCreate(temp_humi_monitor, "Task TEMP HUMI Monitor", 4096, NULL, 2, NULL);
   /********************************************************************************************/
   
   /*************************************** Tuan Anh's tasks *************************************/
