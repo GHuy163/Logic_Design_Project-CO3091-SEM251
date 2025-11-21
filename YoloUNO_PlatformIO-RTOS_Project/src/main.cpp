@@ -23,6 +23,7 @@
 void setup()
 {
   Serial.begin(115200);
+  delay(3000);
   // check_info_File(0);
   
   /*************************************** Tan Le's tasks *************************************/
@@ -35,9 +36,9 @@ void setup()
   /********************************************************************************************/
   
   /*************************************** Tuan Anh's tasks *************************************/
-  // xTaskCreate(main_server_task, "Main Server", 8192, NULL, 2, NULL);
-	// xTaskCreate(blink_mode, "Blink Mode", 4096, NULL, 1, NULL);
-  xTaskCreate(power_demo_task, "Power Demo", 4096, NULL, 1, NULL);
+  xTaskCreate(main_server_task, "Main Server", 8192, NULL, 2, NULL);
+	xTaskCreate(blink_mode, "Blink Mode", 4096, NULL, 1, NULL);
+  // xTaskCreate(power_demo_task, "Power Demo", 4096, NULL, 1, NULL);
   /********************************************************************************************/
 
   // xTaskCreate(led_blinky, "Task LED Blinky", 4096, NULL, 2, NULL);
