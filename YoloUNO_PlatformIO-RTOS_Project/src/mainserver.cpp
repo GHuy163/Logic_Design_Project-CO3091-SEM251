@@ -6,6 +6,7 @@ WebServer WiFiserver(80);
 bool led_state = false;
 bool neo_state = false;
 bool isAPMode = true;
+bool isAPConnected = false;
 
 // NeoPixel object (1 LED)
 Adafruit_NeoPixel pixels(1, NEO_PIN, NEO_GRB + NEO_KHZ800);
@@ -13,10 +14,10 @@ Adafruit_NeoPixel pixels(1, NEO_PIN, NEO_GRB + NEO_KHZ800);
 int blinkInterval = 1000;
 bool blinkMode = false;
 
-String WiFiSTA_ID = "ACLAB";
-String WiFiSTA_PASS = "ACLAB2023";
+String WiFiSTA_ID = "";
+String WiFiSTA_PASS = "";
 
-/* ========== HTML PAGE ========== */
+/* ========== HTML PAGES ========== */
 String mainPage() {
     float temperature = 0, humidity = 0;
     if (dht_mutex && xSemaphoreTake(dht_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
@@ -129,6 +130,12 @@ String mainPage() {
                     <em>)rawliteral" + modeText + R"rawliteral(</em>
                 </div>
 
+                <!-- WIFI DISPLAY -->
+                <div class="info">
+                    <strong>Current WiFi:</strong><br>
+                    )rawliteral" + (isAPMode ? "ESP32 Access Point" : WiFiSTA_ID) + R"rawliteral(
+                </div>
+
                 <!-- SENSOR -->
                 <div class="sensor">
                     Temperature: <strong id="temp">--</strong><br>
@@ -160,6 +167,11 @@ String mainPage() {
 
                     <h3>Pick Color</h3>
                     <input type="color" id="colorpicker" onchange="setColor(this.value)">
+                </div>
+
+                <!-- SETTINGS -->
+                <div class="card">
+                    <button class="btn-blue" style="width:100%" onclick="location.href='/settings'">Settings</button>
                 </div>
             
                 <script>
@@ -223,6 +235,88 @@ String mainPage() {
     )rawliteral";
 }
 
+String settingsPage() {
+    return R"rawliteral(
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>WiFi Settings</title>
+                <style>
+                    body {
+                        font-family: Arial;
+                        background: var(--bg);
+                        color: var(--fg);
+                        text-align: center;
+                        padding: 20px;
+                    }
+    
+                    :root {
+                        --bg: #eef2f3;
+                        --fg: #111;
+                        --card-bg: #ffffff;
+                    }
+    
+                    .dark {
+                        --bg: #121212;
+                        --fg: #e3e3e3;
+                        --card-bg: #1e1e1e; 
+                    }
+    
+                    .card {
+                        background: var(--card-bg);
+                        width: 320px;
+                        padding: 20px;
+                        margin: 20px auto;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+                    }
+                        
+                    input {
+                        width: 100%;
+                        padding: 10px;
+                        margin: 10px 0;
+                        border: 1px solid #ccc;
+                        border-radius: 8px;
+                    }
+                        
+                    .dark input {
+                        border-color: #444;
+                        background: #333;
+                        color: #fff;
+                    }
+    
+                    button {
+                        width: 100%;
+                        height: 45px;
+                        margin: 8px 0;
+                        border: none;
+                        border-radius: 10px;
+                        cursor: pointer;
+                        font-size: 16px;
+                        color: white;
+                        background: #3498db;
+                    }
+                </style>
+            </head>
+            
+            <body class="dark"> 
+                <!-- Default dark mode, or remove to match main page -->
+                <div class="card">
+                    <h2>WiFi Settings</h2>
+                    <form action="/connect" method="GET">
+                        <input type="text" name="ssid" placeholder="WiFi SSID" required>
+                        <input type="password" name="pass" placeholder="Password" required>
+                        <button type="submit">Connect</button>
+                    </form>
+                    <a href="/"><button style="background: #2ecc71;">Back to Dashboard</button></a>
+                </div>
+            </body>
+        </html>
+    )rawliteral";
+}
+
 /* ========== WIFI AP + STA SETUP ========== */
 
 void connectToWiFi()
@@ -248,13 +342,19 @@ void connectToWiFi()
 
 void startAPMode()
 {
-    Serial.println("[WiFi] Starting AP...");
-
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP("ESP32 Access Point", "bruhh12345");
-
-    Serial.print("[WiFi] AP IP: ");
-    Serial.println(WiFi.softAPIP());
+    if (!isAPConnected) {
+        IPAddress apIP(192,168,10,1);
+        IPAddress gateway(192,168,10,1);
+        IPAddress subnet(255,255,255,0);
+        WiFi.mode(WIFI_AP);
+        Serial.println("[WiFi] Starting AP...");
+        WiFi.softAP("ESP32 Access Point", "bruhh12345");
+        WiFi.softAPConfig(apIP, gateway, subnet);
+        Serial.print("[WiFi] AP IP: ");
+        Serial.println(WiFi.softAPIP());
+        isAPConnected = true;
+    }
+    isAPMode = true;
 }
 
 /* ========== WEBSERVER SETUP ========== */
@@ -367,6 +467,22 @@ void setupServer() {
         WiFiserver.send(200, "application/json", json);
     });
 
+    WiFiserver.on("/settings", []() {
+        WiFiserver.send(200, "text/html", settingsPage());
+    });
+    
+    WiFiserver.on("/connect", []() {
+        if (WiFiserver.hasArg("ssid") && WiFiserver.hasArg("pass")) {
+            WiFiSTA_ID = WiFiserver.arg("ssid");
+            WiFiSTA_PASS = WiFiserver.arg("pass");
+            Serial.printf("Connecting to new WiFi: %s\n", WiFiSTA_ID.c_str());
+            WiFi.mode(WIFI_AP_STA);
+            WiFi.begin(WiFiSTA_ID.c_str(), WiFiSTA_PASS.c_str());
+            isAPMode = false;
+        }
+        WiFiserver.send(200, "text/html", "<h1>Connecting to " + WiFiSTA_ID + "... <a href='/'>Back</a></h1>");
+    });
+
     WiFiserver.begin();
     Serial.println("[Server] HTTP server started!");
 }
@@ -379,14 +495,16 @@ void WiFiEvent(WiFiEvent_t event)
         case ARDUINO_EVENT_WIFI_STA_START:
             Serial.println("[Event] STA Started"); break;
 
-        case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-            Serial.println("[Event] Connected to WiFi!");
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            Serial.println("[Event] Connected to WiFi! IP: ");
+            Serial.println(WiFi.localIP());
             isAPMode = false;
             break;
 
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
             Serial.println("[Event] WiFi disconnected! Reconnecting...");
             WiFi.reconnect();
+            isAPMode = true;
             break;
 
         case ARDUINO_EVENT_WIFI_AP_START:
