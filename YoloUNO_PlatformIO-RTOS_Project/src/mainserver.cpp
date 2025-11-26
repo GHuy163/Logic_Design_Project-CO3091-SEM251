@@ -588,7 +588,7 @@ void connectToWiFi()
     Serial.println("[WiFi] Trying STA Mode...");
 
     WiFi.mode(WIFI_AP_STA);
-    WiFi.begin(WIFI_SSID.c_str(), WIFI_PASS.c_str());
+    WiFi.begin(WiFiSTA_ID.c_str(), WiFiSTA_PASS.c_str());
 
     unsigned long start = millis();
     bool connected = false;
