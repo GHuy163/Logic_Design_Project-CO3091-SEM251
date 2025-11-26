@@ -27,7 +27,7 @@ String mainPage() {
     }
 
     String currentIP = isAPMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
-    String modeText  = isAPMode ? "Access Point Mode" : "Connected to WiFi (Station Mode)";
+    String modeText  = isAPMode ? "Access Point" : "Dual AP + Station";
     return R"rawliteral(
         <!DOCTYPE html>
         <html>
@@ -455,6 +455,132 @@ String settingsPage() {
     )rawliteral";
 }
 
+String connectingPage(String ssid) {
+    return R"rawliteral(
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>Connecting...</title>
+                <style>
+                    :root {
+                        --bg1: #d9e4ff;
+                        --bg2: #c7d6ff;
+                        --text: #0e111a;
+                        --card-bg: rgba(255,255,255,0.55);
+                        --glass-border: rgba(255,255,255,0.35);
+                        --accent2: #00d4ff;
+                        --radius: 16px;
+                        --shadow: 0 6px 26px rgba(0,0,0,0.18);
+                    }
+
+                    body {
+                        margin: 0;
+                        font-family: Poppins, Arial;
+                        background: linear-gradient(130deg, var(--bg1), var(--bg2));
+                        color: var(--text);
+                        text-align: center;
+                    }
+
+                    .dark {
+                        --bg1: #0e1220;
+                        --bg2: #151b2e;
+                        --text: #f1f1f1;
+                        --card-bg: rgba(255,255,255,0.08);
+                        --glass-border: rgba(255,255,255,0.1);
+                    }
+
+                    .card {
+                        width: min(90vw, 380px);
+                        margin: 80px auto;
+                        padding: 20px;
+                        background: var(--card-bg);
+                        border: 1px solid var(--glass-border);
+                        border-radius: var(--radius);
+                        box-shadow: var(--shadow);
+                        backdrop-filter: blur(12px);
+                    }
+
+                    h2 {
+                        margin-top: 0;
+                        font-size: 26px;
+                        font-weight: 700;
+                    }
+
+                    /* Spinner */
+                    .loader {
+                        margin: 20px auto;
+                        border: 6px solid rgba(255,255,255,0.4);
+                        border-top: 6px solid var(--accent2);
+                        border-radius: 50%;
+                        width: 44px;
+                        height: 44px;
+                        animation: spin 1s linear infinite;
+                    }
+
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+
+                    .btn-blue {
+                        background: linear-gradient(180deg, #5b8bff, #3a63d8);
+                        border: none;
+                        padding: 12px 18px;
+                        border-radius: 12px;
+                        font-size: 16px;
+                        color: white;
+                        cursor: pointer;
+                        margin-top: 16px;
+                        display: none;
+                    }
+
+                    .toggle {
+                        position: fixed;
+                        top: 14px;
+                        right: 14px;
+                    }
+                </style>
+            </head>
+            
+            <body>
+                <button class="toggle btn-blue" onclick="toggleDark()">Dark Mode</button>
+
+                <div class="card">
+                    <h2 id="statusTitle">Connecting to:<br><b>)rawliteral" + ssid + R"rawliteral(</b></h2>
+
+                    <div id ="spinner" class="loader"></div>
+
+                    <p id="statusText" style="margin-top:10px;">Attempting connection...<br>Please wait a moment.</p>
+
+                    <button id="backButton" class="btn-blue" onclick="location.href='/'">Back to Dashboard</button>
+                </div>
+
+                <script>
+                    function toggleDark() {
+                        document.body.classList.toggle("dark");
+                    }
+
+                    function checkConnection() {
+                        fetch('/state')
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.connected) {
+                                document.getElementById('statusTitle').innerHTML = "Connected!";
+                                document.getElementById('statusText').innerHTML = "ESP32 is now connected to WiFi.<br>You may return to the dashboard.";
+                                document.getElementById('spinner').style.display = "none";
+                                document.getElementById('backButton').style.display = "inline-block";
+                            }
+                        });
+                    }
+                        
+                    setInterval(checkConnection, 1000);
+                </script>
+            </body>
+        </html>
+    )rawliteral";
+}
 /* ========== WIFI AP + STA SETUP ========== */
 
 void connectToWiFi()
@@ -462,20 +588,32 @@ void connectToWiFi()
     Serial.println("[WiFi] Trying STA Mode...");
 
     WiFi.mode(WIFI_AP_STA);
-    WiFi.begin(WiFiSTA_ID.c_str(), WiFiSTA_PASS.c_str());
+    WiFi.begin(WIFI_SSID.c_str(), WIFI_PASS.c_str());
 
     unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) {
+    bool connected = false;
+    
+    while (millis() - start < 8000) {
+        if (WiFi.status() == WL_CONNECTED) {
+            connected = true;
+            break;
+        }
+        delay(1000);
         Serial.print(".");
-        delay(500);
     }
 
-    if (WiFi.status() == WL_CONNECTED) {
+    if (connected) {
         Serial.println("\n[WiFi] STA Connected!");
         Serial.print("[WiFi] STA IP: ");
         Serial.println(WiFi.localIP());
+        isAPMode = false;
     } 
-    else Serial.println("\n[WiFi] STA Failed.");
+    else {
+        Serial.println("\n[WiFi] STA Failed.");
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_AP);
+        isAPMode = true;
+    }
 }
 
 void startAPMode()
@@ -508,38 +646,6 @@ void setupServer() {
     WiFiserver.on("/", []() {
         WiFiserver.send(200, "text/html", mainPage());
     });
-
-    // // LED — normal LED
-    // WiFiserver.on("/led/on", []() {
-    //     led_state = true;
-    //     digitalWrite(LED_PIN, HIGH);
-    //     WiFiserver.sendHeader("Location", "/");
-    //     WiFiserver.send(303);
-    // });
-
-    // WiFiserver.on("/led/off", []() {
-    //     led_state = false;
-    //     digitalWrite(LED_PIN, LOW);
-    //     WiFiserver.sendHeader("Location", "/");
-    //     WiFiserver.send(303);
-    // });
-
-    // // NEO — NeoPixel LED
-    // WiFiserver.on("/neo/on", []() {
-    //     neo_state = true;
-    //     pixels.setPixelColor(0, pixels.Color(0, 255, 0)); // Green
-    //     pixels.show();
-    //     WiFiserver.sendHeader("Location", "/");
-    //     WiFiserver.send(303);
-    // });
-
-    // WiFiserver.on("/neo/off", []() {
-    //     neo_state = false;
-    //     pixels.clear();
-    //     pixels.show();
-    //     WiFiserver.sendHeader("Location", "/");
-    //     WiFiserver.send(303);
-    // });
 
     WiFiserver.on("/led/on", []() {
         led_state = true;
@@ -589,7 +695,8 @@ void setupServer() {
     WiFiserver.on("/state", [](){
         String json = "{";
         json += "\"led\":" + String(led_state ? "true" : "false") + ",";
-        json += "\"neo\":" + String(neo_state ? "true" : "false");
+        json += "\"neo\":" + String(neo_state ? "true" : "false") + ",";
+        json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false");
         json += "}";
         WiFiserver.send(200, "application/json", json);
     });
@@ -618,7 +725,7 @@ void setupServer() {
             WiFi.begin(WiFiSTA_ID.c_str(), WiFiSTA_PASS.c_str());
             isAPMode = false;
         }
-        WiFiserver.send(200, "text/html", "<h1>Connecting to " + WiFiSTA_ID + "... <a href='/'>Back</a></h1>");
+        WiFiserver.send(200, "text/html", connectingPage(WiFiSTA_ID));
     });
 
     WiFiserver.begin();
@@ -640,9 +747,10 @@ void WiFiEvent(WiFiEvent_t event)
             break;
 
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-            Serial.println("[Event] WiFi disconnected! Reconnecting...");
-            WiFi.reconnect();
+            Serial.println("[Event] WiFi disconnected! AP mode enabled.");
             isAPMode = true;
+            WiFi.disconnect(true, false);
+            WiFi.mode(WIFI_AP);
             break;
 
         case ARDUINO_EVENT_WIFI_AP_START:
